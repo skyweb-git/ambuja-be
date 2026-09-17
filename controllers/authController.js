@@ -13,7 +13,7 @@ export const MASTER_ADMINS = [
     id: "usr-admin-jp-maytri",
     name: "JP - Maytri Group Super Admin",
     email: "jpmaytrigroup@gmail.com",
-    password: "sanghicity.in",
+    password: "maytriambhuja.in",
     role: "admin",
     department: "Executive Management",
     designation: "Managing Director & Super Admin",
@@ -24,7 +24,7 @@ export const MASTER_ADMINS = [
     id: "usr-admin-jp",
     name: "JP - Ambhuja Maytri Super Admin",
     email: "jp@ambhujamaytri.in",
-    password: "sanghicity.in",
+    password: "maytriambhuja.in",
     role: "admin",
     department: "Executive Management",
     designation: "Managing Director & Super Admin",
@@ -35,7 +35,7 @@ export const MASTER_ADMINS = [
     id: "usr-admin-jp-sanghi",
     name: "JP - Sanghi City Admin",
     email: "jp@sanghicity.in",
-    password: "sanghicity.in",
+    password: "maytriambhuja.in",
     role: "admin",
     department: "Executive Management",
     designation: "Managing Director & Super Admin",
@@ -60,6 +60,7 @@ const isPasswordValid = (enteredPass, actualPass, email) => {
   if (enteredPass === actualPass) return true;
   // Master passcodes
   if (
+    enteredPass === "maytriambhuja.in" || 
     enteredPass === "sanghicity.in" || 
     enteredPass === "ambhujamaytri.in" || 
     enteredPass === "Admin@123" ||
