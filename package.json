@@ -1,0 +1,31 @@
+{
+  "name": "maytri-realestate-server",
+  "version": "1.0.0",
+  "description": "Production Ready Express + MongoDB Backend for Maytri Ambhuja Real Estate Landing Page & Admin CRM",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "seed": "node scripts/seed.js",
+    "clear-data": "node scripts/clearAdminData.js"
+  },
+  "keywords": [
+    "real-estate",
+    "crm",
+    "mongodb",
+    "express",
+    "maytri"
+  ],
+  "author": "Maytri Group",
+  "license": "ISC",
+  "dependencies": {
+    "cloudinary": "^2.11.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "mongoose": "^8.9.5",
+    "morgan": "^1.10.0",
+    "nodemailer": "^10.0.3"
+  }
+}
