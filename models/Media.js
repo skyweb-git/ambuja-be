@@ -1,4 +1,4 @@
-﻿import mongoose from "mongoose";
+import mongoose from "mongoose";
 
 const mediaSchema = new mongoose.Schema(
   {
@@ -14,7 +14,6 @@ const mediaSchema = new mongoose.Schema(
     },
     category: {
       type: String,
-      enum: ["video", "image", "logo", "document"],
       default: "image",
     },
     cloudinaryUrl: {
