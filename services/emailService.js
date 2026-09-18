@@ -24,38 +24,50 @@ export const createTransporter = () => {
 /**
  * Send 2FA One-Time Passcode (OTP) Email for Admin / Employee Login
  */
-export const sendOtpEmail = async ({ email, otp, name, role = 'admin' }) => {
+export const sendOtpEmail = async ({ email, otp, name, role = 'admin', purpose = 'login' }) => {
   try {
     const transporter = createTransporter();
     const sender = process.env.SMTP_USER || 'skywebdevelopers123@gmail.com';
     const notifyAdmin = process.env.ADMIN_NOTIFY_EMAIL || 'jpmaytrigroup@gmail.com';
 
     const isAdmin = role === 'admin' || email.includes('admin') || email.includes('jp@');
-    const subject = isAdmin
+    let subject = isAdmin
       ? `🔐 Super Admin Login OTP: ${otp} — Ambhuja Maytri CRM`
       : `🔐 Employee Portal Verification OTP: ${otp} — Ambhuja Maytri`;
+    let headerTitle = isAdmin ? '👑 Super Admin Security Verification' : '💼 Employee Secure Portal Login';
+    let introText = `Use the following one-time verification passcode (OTP) to sign in to the ${isAdmin ? 'Admin Management Dashboard' : 'Employee Workspace'}:`;
+
+    if (purpose === 'passcode_reset') {
+      subject = `🔑 Passcode Reset OTP: ${otp} — Ambhuja Maytri Admin`;
+      headerTitle = '🔑 Admin Passcode Reset Verification';
+      introText = `You recently requested to reset your admin passcode. Use the 6-digit OTP below to authorize and complete setting your new passcode:`;
+    } else if (purpose === 'email_change') {
+      subject = `📧 Admin Email Change OTP: ${otp} — Ambhuja Maytri Admin`;
+      headerTitle = '📧 Admin Email ID Change Authorization';
+      introText = `A request was made to update your registered Admin Email address. Use the 6-digit verification code below to authorize this email change:`;
+    }
 
     const htmlContent = `
       <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 580px; margin: 0 auto; background: #0c1524; color: #e2e8f0; border: 1px solid #1e293b; border-radius: 12px; overflow: hidden;">
         <div style="background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%); padding: 24px; text-align: center; border-bottom: 2px solid ${isAdmin ? '#3b82f6' : '#14b8a6'};">
           <h1 style="color: ${isAdmin ? '#60a5fa' : '#2dd4bf'}; margin: 0 0 6px; font-size: 22px; letter-spacing: 0.5px;">MAYTRI AMBHUJA CRM</h1>
-          <p style="color: #94a3b8; margin: 0; font-size: 13px;">${isAdmin ? '👑 Super Admin Security Verification' : '💼 Employee Secure Portal Login'}</p>
+          <p style="color: #94a3b8; margin: 0; font-size: 13px;">${headerTitle}</p>
         </div>
         
         <div style="padding: 28px 24px; text-align: center;">
           <p style="font-size: 15px; color: #cbd5e1; margin-bottom: 12px;">Hello <strong>${name || (isAdmin ? 'Admin' : 'Team Member')}</strong>,</p>
-          <p style="font-size: 14px; color: #94a3b8; margin-bottom: 24px;">Use the following one-time verification passcode (OTP) to sign in to the ${isAdmin ? 'Admin Management Dashboard' : 'Employee Workspace'}:</p>
+          <p style="font-size: 14px; color: #94a3b8; margin-bottom: 24px;">${introText}</p>
 
           <div style="background: rgba(30, 41, 59, 0.8); border: 2px dashed ${isAdmin ? '#3b82f6' : '#14b8a6'}; border-radius: 10px; padding: 18px; margin: 0 auto 24px; max-width: 280px;">
             <span style="font-family: monospace; font-size: 34px; font-weight: 800; letter-spacing: 8px; color: ${isAdmin ? '#38bdf8' : '#2dd4bf'};">${otp}</span>
           </div>
 
           <p style="font-size: 12.5px; color: #facc15; margin-bottom: 8px;">⏱️ This code is valid for <strong>10 minutes</strong>.</p>
-          <p style="font-size: 12px; color: #64748b; margin: 0;">If you did not initiate this login request, please ignore this email or contact support.</p>
+          <p style="font-size: 12px; color: #64748b; margin: 0;">If you did not initiate this request, please contact technical security immediately.</p>
         </div>
 
         <div style="background: #080d1a; padding: 14px; text-align: center; font-size: 11px; color: #64748b; border-top: 1px solid #1e293b;">
-          Sent securely via SMTP to <strong>${email}</strong> &bull; ${isAdmin ? 'Super Admin Security Gateway' : 'Employee Authentication Desk'}
+          Sent securely via SMTP to <strong>${email}</strong> &bull; Ambhuja Maytri Security Desk
         </div>
       </div>
     `;

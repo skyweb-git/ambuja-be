@@ -66,6 +66,15 @@ const contentSchema = new mongoose.Schema(
       title: { type: String, default: 'Amenities' },
       subtitle: { type: String, default: 'A comprehensive suite of modern lifestyle, wellness, sports, and daily conveniences curated for all age groups.' },
       items: { type: Array, default: [] }
+    },
+    projectsSection: {
+      eyebrowTag: { type: String, default: 'LANDMARK DEVELOPMENTS' },
+      title: { type: String, default: 'Our Projects' },
+      subtitle: {
+        type: String,
+        default: 'Explore premier master-planned townships and signature villa communities developed with unmatched luxury, architectural brilliance, and strategic connectivity.'
+      },
+      items: { type: Array, default: [] }
     }
   },
   {

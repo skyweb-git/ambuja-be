@@ -347,6 +347,301 @@ export const resetPassword = async (req, res) => {
   }
 };
 
+// POST /api/auth/request-passcode-reset-otp
+export const requestPasscodeResetOtp = async (req, res) => {
+  try {
+    const { email } = req.body;
+    let cleanEmail = (email || "").trim().toLowerCase();
+    if (!cleanEmail) {
+      cleanEmail = "jpmaytrigroup@gmail.com";
+    }
+
+    let user = null;
+    const employee = await Employee.findOne({ email: cleanEmail });
+    if (employee) {
+      user = {
+        id: employee.id || employee._id.toString(),
+        name: employee.name,
+        email: employee.email,
+        role: employee.role || "admin",
+      };
+    } else {
+      const master = MASTER_ADMINS.find((m) => m.email.toLowerCase() === cleanEmail);
+      if (master) {
+        user = {
+          id: master.id,
+          name: master.name,
+          email: master.email,
+          role: master.role,
+        };
+      }
+    }
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: "No registered account found with this email address." });
+    }
+
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = Date.now() + 10 * 60 * 1000;
+
+    otpStore.set(`reset_${cleanEmail}`, {
+      otp,
+      expiresAt,
+      user,
+    });
+
+    console.log(`🔑 [PASSCODE RESET OTP] Code for ${cleanEmail}: ${otp}`);
+
+    await sendOtpEmail({
+      email: cleanEmail,
+      otp,
+      name: user.name,
+      role: user.role,
+      purpose: 'passcode_reset',
+    }).catch((err) => console.error("SMTP delivery error:", err.message));
+
+    return res.json({
+      success: true,
+      email: cleanEmail,
+      message: `A 6-digit passcode reset OTP has been sent to ${cleanEmail}. Please check your inbox.`,
+    });
+  } catch (error) {
+    console.error("requestPasscodeResetOtp error:", error);
+    res.status(500).json({ success: false, message: "Failed to send passcode reset OTP", error: error.message });
+  }
+};
+
+// POST /api/auth/verify-passcode-reset
+export const verifyPasscodeReset = async (req, res) => {
+  try {
+    const { email, otp, newPassword } = req.body;
+    let cleanEmail = (email || "").trim().toLowerCase();
+    if (!cleanEmail) {
+      cleanEmail = "jpmaytrigroup@gmail.com";
+    }
+    const cleanOtp = (otp || "").trim();
+    const cleanPass = (newPassword || "").trim();
+
+    if (!cleanEmail || !cleanOtp || !cleanPass) {
+      return res.status(400).json({ success: false, message: "Please provide email, verification code (OTP), and new passcode." });
+    }
+
+    if (cleanPass.length < 6) {
+      return res.status(400).json({ success: false, message: "New passcode must be at least 6 characters long." });
+    }
+
+    const storedData = otpStore.get(`reset_${cleanEmail}`);
+    if (!storedData) {
+      return res.status(400).json({ success: false, message: "No active passcode reset request found or OTP expired. Please request a new code." });
+    }
+
+    if (Date.now() > storedData.expiresAt) {
+      otpStore.delete(`reset_${cleanEmail}`);
+      return res.status(400).json({ success: false, message: "Verification code has expired. Please request a new one." });
+    }
+
+    if (storedData.otp !== cleanOtp) {
+      return res.status(401).json({ success: false, message: "Incorrect verification code. Please check your email and try again." });
+    }
+
+    otpStore.delete(`reset_${cleanEmail}`);
+
+    // Update in-memory MASTER_ADMINS
+    const masterAdmin = MASTER_ADMINS.find((adm) => adm.email.toLowerCase() === cleanEmail);
+    if (masterAdmin) {
+      masterAdmin.password = cleanPass;
+    }
+
+    // Check / update MongoDB employee/admin record
+    let employee = await Employee.findOne({ email: cleanEmail });
+    if (employee) {
+      employee.password = cleanPass;
+      await employee.save();
+    } else if (masterAdmin) {
+      employee = new Employee({
+        id: masterAdmin.id,
+        name: masterAdmin.name,
+        email: masterAdmin.email,
+        password: cleanPass,
+        role: "admin",
+        department: masterAdmin.department,
+        designation: masterAdmin.designation,
+        avatar: masterAdmin.avatar,
+        status: "Active"
+      });
+      await employee.save();
+    } else {
+      return res.status(404).json({ success: false, message: "Account not found." });
+    }
+
+    return res.json({
+      success: true,
+      message: "Admin passcode updated successfully! You can now sign in with your new passcode.",
+    });
+  } catch (error) {
+    console.error("verifyPasscodeReset error:", error);
+    res.status(500).json({ success: false, message: "Failed to reset passcode", error: error.message });
+  }
+};
+
+// POST /api/auth/request-email-change-otp
+export const requestEmailChangeOtp = async (req, res) => {
+  try {
+    const { currentEmail, currentPassword, newEmail } = req.body;
+    let cleanCurrent = (currentEmail || "").trim().toLowerCase();
+    if (!cleanCurrent) cleanCurrent = "jpmaytrigroup@gmail.com";
+    const cleanPass = (currentPassword || "").trim();
+    const cleanNew = (newEmail || "").trim().toLowerCase();
+
+    if (!cleanPass || !cleanNew) {
+      return res.status(400).json({ success: false, message: "Please provide your current passcode and the new email address." });
+    }
+
+    if (!cleanNew.includes("@") || !cleanNew.includes(".")) {
+      return res.status(400).json({ success: false, message: "Please provide a valid new email address." });
+    }
+
+    if (cleanCurrent === cleanNew) {
+      return res.status(400).json({ success: false, message: "New email address must be different from current email address." });
+    }
+
+    // Authenticate current password
+    let user = null;
+    const employee = await Employee.findOne({ email: cleanCurrent });
+    if (employee) {
+      if (!isPasswordValid(cleanPass, employee.password, cleanCurrent)) {
+        return res.status(401).json({ success: false, message: "Incorrect current passcode. Authentication failed." });
+      }
+      user = {
+        id: employee.id || employee._id.toString(),
+        name: employee.name,
+        email: employee.email,
+        role: employee.role || "admin",
+      };
+    } else {
+      const master = MASTER_ADMINS.find((m) => m.email.toLowerCase() === cleanCurrent && isPasswordValid(cleanPass, m.password, cleanCurrent));
+      if (!master) {
+        return res.status(401).json({ success: false, message: "Incorrect current passcode. Authentication failed." });
+      }
+      user = {
+        id: master.id,
+        name: master.name,
+        email: master.email,
+        role: master.role,
+      };
+    }
+
+    // Check if new email is already taken
+    const existingEmp = await Employee.findOne({ email: cleanNew });
+    const existingMaster = MASTER_ADMINS.find((m) => m.email.toLowerCase() === cleanNew);
+    if (existingEmp || existingMaster) {
+      return res.status(400).json({ success: false, message: "The new email address is already registered to another account." });
+    }
+
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = Date.now() + 10 * 60 * 1000;
+
+    otpStore.set(`email_change_${cleanCurrent}`, {
+      otp,
+      expiresAt,
+      currentEmail: cleanCurrent,
+      newEmail: cleanNew,
+      user,
+    });
+
+    console.log(`📧 [EMAIL CHANGE OTP] Code for ${cleanCurrent} -> ${cleanNew}: ${otp}`);
+
+    await sendOtpEmail({
+      email: cleanCurrent,
+      otp,
+      name: user.name,
+      role: user.role,
+      purpose: 'email_change',
+    }).catch((err) => console.error("SMTP delivery error:", err.message));
+
+    return res.json({
+      success: true,
+      currentEmail: cleanCurrent,
+      newEmail: cleanNew,
+      message: `A 6-digit authorization code has been sent to your current email (${cleanCurrent}). Please check your inbox.`,
+    });
+  } catch (error) {
+    console.error("requestEmailChangeOtp error:", error);
+    res.status(500).json({ success: false, message: "Failed to send email change OTP", error: error.message });
+  }
+};
+
+// POST /api/auth/verify-email-change
+export const verifyEmailChange = async (req, res) => {
+  try {
+    const { currentEmail, newEmail, otp } = req.body;
+    let cleanCurrent = (currentEmail || "").trim().toLowerCase();
+    if (!cleanCurrent) cleanCurrent = "jpmaytrigroup@gmail.com";
+    const cleanNew = (newEmail || "").trim().toLowerCase();
+    const cleanOtp = (otp || "").trim();
+
+    if (!cleanOtp) {
+      return res.status(400).json({ success: false, message: "Please enter the 6-digit authorization code." });
+    }
+
+    const storedData = otpStore.get(`email_change_${cleanCurrent}`);
+    if (!storedData) {
+      return res.status(400).json({ success: false, message: "No active email change request found or code expired. Please request a new code." });
+    }
+
+    if (Date.now() > storedData.expiresAt) {
+      otpStore.delete(`email_change_${cleanCurrent}`);
+      return res.status(400).json({ success: false, message: "Authorization code has expired. Please request a new one." });
+    }
+
+    if (storedData.otp !== cleanOtp) {
+      return res.status(401).json({ success: false, message: "Incorrect authorization code. Please try again." });
+    }
+
+    const targetNewEmail = cleanNew || storedData.newEmail;
+    otpStore.delete(`email_change_${cleanCurrent}`);
+
+    // Update in-memory MASTER_ADMINS
+    MASTER_ADMINS.forEach((adm) => {
+      if (adm.email.toLowerCase() === cleanCurrent) {
+        adm.email = targetNewEmail;
+      }
+    });
+
+    // Update MongoDB
+    let employee = await Employee.findOne({ email: cleanCurrent });
+    if (employee) {
+      employee.email = targetNewEmail;
+      await employee.save();
+    } else {
+      const master = MASTER_ADMINS.find((adm) => adm.email.toLowerCase() === targetNewEmail);
+      if (master) {
+        employee = new Employee({
+          id: master.id,
+          name: master.name,
+          email: targetNewEmail,
+          password: master.password,
+          role: "admin",
+          department: master.department,
+          designation: master.designation,
+          avatar: master.avatar,
+          status: "Active"
+        });
+        await employee.save();
+      }
+    }
+
+    return res.json({
+      success: true,
+      newEmail: targetNewEmail,
+      message: `Admin email ID successfully updated to ${targetNewEmail}! You can now sign in using your new email address.`,
+    });
+  } catch (error) {
+    console.error("verifyEmailChange error:", error);
+    res.status(500).json({ success: false, message: "Failed to update admin email ID", error: error.message });
+  }
+};
+
 // GET /api/analytics
 export const getAnalytics = async (req, res) => {
   try {
